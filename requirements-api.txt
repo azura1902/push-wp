@@ -1,0 +1,13 @@
+fastapi==0.115.0
+uvicorn==0.30.6
+sqlalchemy==2.0.36
+psycopg2-binary==2.9.9
+pydantic==2.9.2
+python-dotenv==1.0.1
+openai==1.51.0
+apscheduler==3.10.4
+requests==2.32.3
+python-multipart==0.0.12
+pillow==10.4.0
+beautifulsoup4==4.12.3
+pytz==2026.1.post1

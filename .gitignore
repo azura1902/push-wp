@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+*.egg-info/
+
+# Môi trường & secrets
+.env
+
+# Database local
+data.db
+*.db-shm
+*.db-wal
+
+# Ảnh đã tải về (ephemeral)
+static/images/
+
+# Streamlit cache
+.streamlit/secrets.toml
+
+# OS
+.DS_Store
+Thumbs.db
