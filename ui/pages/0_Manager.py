@@ -205,7 +205,7 @@ edited = st.data_editor(
         "Tiêu đề":     st.column_config.TextColumn("Tiêu đề", disabled=True, width=200),
         "Trạng thái":  st.column_config.TextColumn("Trạng thái", disabled=True, width=120),
         "⏰ Lịch đăng": st.column_config.DatetimeColumn("⏰ Lịch đăng", format="DD/MM/YYYY HH:mm", width=145),
-        "🔗 WP":        st.column_config.LinkColumn("🔗 WP", display_text="Xem", width=60),
+        "🔗 WP":        st.column_config.LinkColumn("🔗 WP", width=280),
     },
     key="main_table",
 )
@@ -218,14 +218,13 @@ selected_posts_map = {p["id"]: p for p in posts_raw}
 # Action bar
 # ──────────────────────────────────────────────────────────────────
 
-a1, a2, a3, a4, a5, a6 = st.columns([2, 2, 2, 3, 2, 2])
-btn_generate = a1.button("🤖 Sinh bài",      disabled=not selected_ids, use_container_width=True)
-btn_save     = a2.button("💾 Lưu thay đổi",  use_container_width=True)
-btn_publish  = a3.button("🚀 Đăng ngay",     disabled=not selected_ids, use_container_width=True)
-schedule_dt   = a4.date_input("📅 Ngày", value=None, key="sched_date")
-schedule_time = a4.time_input("⏰ Giờ",  value=None, key="sched_time", step=60)
-btn_schedule  = a5.button("📅 Đặt lịch",     disabled=not selected_ids, use_container_width=True)
-btn_delete    = a6.button("🗑️ Xóa đã chọn",  disabled=not selected_ids, use_container_width=True)
+a1, a2, a3, a4, a5 = st.columns([2, 2, 3, 2, 2])
+btn_save     = a1.button("💾 Lưu thay đổi",  use_container_width=True)
+btn_publish  = a2.button("🚀 Đăng ngay",     disabled=not selected_ids, use_container_width=True)
+schedule_dt   = a3.date_input("📅 Ngày", value=None, key="sched_date")
+schedule_time = a3.time_input("⏰ Giờ",  value=None, key="sched_time", step=60)
+btn_schedule  = a4.button("📅 Đặt lịch",     disabled=not selected_ids, use_container_width=True)
+btn_delete    = a5.button("🗑️ Xóa đã chọn",  disabled=not selected_ids, use_container_width=True)
 
 # ──────────────────────────────────────────────────────────────────
 # Xử lý actions
@@ -250,40 +249,35 @@ if btn_save:
     invalidate()
     st.rerun()
 
-if btn_generate:
+if btn_publish:
     progress = st.progress(0, text="Đang sinh bài...")
     errors = []
     for i, post_id in enumerate(selected_ids):
-        r = api_post(f"/posts/{post_id}/generate", {})
-        if r.status_code not in (200, 201):
-            errors.append(f"#{post_id}: {r.text[:80]}")
-        progress.progress((i + 1) / len(selected_ids), text=f"Sinh bài {i+1}/{len(selected_ids)}...")
-    progress.empty()
-    if errors:
-        st.error("Lỗi: " + "; ".join(errors))
-    else:
-        st.success(f"✅ Sinh xong {len(selected_ids)} bài!")
-    invalidate()
-    st.rerun()
-
-if btn_publish:
-    errors = []
-    for post_id in selected_ids:
         post = selected_posts_map.get(post_id, {})
         site_id = post.get("site_id")
         if not site_id:
             errors.append(f"#{post_id}: chưa chọn Site")
+            progress.progress((i + 1) / len(selected_ids))
             continue
-        if post.get("status") not in ("ready", "draft"):
-            errors.append(f"#{post_id}: status={post.get('status')}, bỏ qua")
+        if post.get("status") == "publishing":
+            errors.append(f"#{post_id}: đang đăng, bỏ qua")
+            progress.progress((i + 1) / len(selected_ids))
             continue
+        # Sinh bài trước
+        progress.progress((i + 1) / len(selected_ids), text=f"Sinh bài {i+1}/{len(selected_ids)}...")
+        rg = api_post(f"/posts/{post_id}/generate", {})
+        if rg.status_code not in (200, 201):
+            errors.append(f"#{post_id} sinh bài lỗi: {rg.text[:80]}")
+            continue
+        # Đăng ngay
         r = api_post("/posts/publish", {"post_id": post_id, "site_id": site_id})
         if r.status_code not in (200, 202):
-            errors.append(f"#{post_id}: {r.text[:80]}")
+            errors.append(f"#{post_id} đăng lỗi: {r.text[:80]}")
+    progress.empty()
     if errors:
         st.warning(" | ".join(errors))
     else:
-        st.success(f"✅ Đã gửi lệnh đăng {len(selected_ids)} bài!")
+        st.success(f"✅ Đã sinh và gửi lệnh đăng {len(selected_ids)} bài!")
     invalidate()
     st.rerun()
 
@@ -293,9 +287,20 @@ if btn_schedule:
     else:
         sched_dt  = datetime.combine(schedule_dt, schedule_time if schedule_time else datetime.min.time())
         sched_str = sched_dt.isoformat()
-        for post_id in selected_ids:
+        progress = st.progress(0, text="Đang sinh bài...")
+        errors = []
+        for i, post_id in enumerate(selected_ids):
+            progress.progress((i + 1) / len(selected_ids), text=f"Sinh bài {i+1}/{len(selected_ids)}...")
+            rg = api_post(f"/posts/{post_id}/generate", {})
+            if rg.status_code not in (200, 201):
+                errors.append(f"#{post_id} sinh bài lỗi: {rg.text[:80]}")
+                continue
             api_put(f"/posts/{post_id}", {"schedule_publish_at": sched_str})
-        st.success(f"✅ Đã đặt lịch {len(selected_ids)} bài → {sched_dt.strftime('%d/%m/%Y %H:%M')}")
+        progress.empty()
+        if errors:
+            st.warning(" | ".join(errors))
+        else:
+            st.success(f"✅ Đã sinh và đặt lịch {len(selected_ids)} bài → {sched_dt.strftime('%d/%m/%Y %H:%M')}")
         invalidate()
         st.rerun()
 
